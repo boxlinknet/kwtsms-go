@@ -1,0 +1,38 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Claude / AI
+.claude/
+CLAUDE.md
+
+# Internal docs (PRD, specs)
+docs/
+
+# Environment
+.env
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage.txt
+coverage.html
