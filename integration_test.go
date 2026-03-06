@@ -39,7 +39,7 @@ func TestIntegrationVerifySuccess(t *testing.T) {
 }
 
 func TestIntegrationVerifyWrongCredentials(t *testing.T) {
-	c, _ := New("wrong_user", "wrong_pass", WithTestMode(true), WithLogFile(""))
+	c, _ := New("go_invalid_user", "go_invalid_pass", WithTestMode(true), WithLogFile(""))
 
 	ok, _, err := c.Verify()
 	if ok {
