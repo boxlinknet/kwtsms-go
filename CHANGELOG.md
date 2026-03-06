@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-03-06
+
+### Added
+
+- Production OTP example with rate limiting, expiry, resend cooldown, and user-facing errors
+- CodeQL badge and Go Version badge in README
+- Complete README: About kwtSMS, Prerequisites, Input Sanitization, Phone Number Formats, Test Mode, What's Handled Automatically, FAQ, Help & Support sections
+- Arabic-Indic and Persian digit examples in Phone Number Formats table
+
+### Changed
+
+- All placeholder credentials now use `go_` prefix (e.g., `go_api_user`, `go_api_pass`)
+- Help & Support links match official kwtSMS format with Library Issues link
+- Removed duplicate Publishing and Links sections from README
+
 ## [0.1.0] - 2026-03-06
 
 ### Added
@@ -38,4 +53,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CodeQL security scanning and Dependabot dependency updates
 - Five runnable examples: basic usage, OTP flow, bulk SMS, HTTP handler, error handling
 
+[0.2.0]: https://github.com/boxlinknet/kwtsms-go/releases/tag/v0.2.0
 [0.1.0]: https://github.com/boxlinknet/kwtsms-go/releases/tag/v0.1.0

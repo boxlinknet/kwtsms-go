@@ -25,7 +25,7 @@ import (
 )
 
 // Version is the library version.
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // KwtSMS is the kwtSMS API client. Safe for concurrent use.
 type KwtSMS struct {
