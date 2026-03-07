@@ -13,15 +13,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: Generate release notes from CHANGELOG
-        id: notes
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           VERSION="${TAG#v}"
-          # Extract the section for this version from CHANGELOG.md
-          NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found" CHANGELOG.md)
-          # Write to file for gh release
-          echo "$NOTES" > release-notes.md
+          awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found" CHANGELOG.md > release-notes.md
+
+      - name: Cross-compile CLI binaries
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          TARGETS="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64"
+          mkdir -p dist
+
+          for target in $TARGETS; do
+            OS="${target%/*}"
+            ARCH="${target#*/}"
+            BIN="kwtsms"
+            EXT=""
+            if [ "$OS" = "windows" ]; then
+              EXT=".exe"
+            fi
+
+            echo "Building ${OS}/${ARCH}..."
+            GOOS=$OS GOARCH=$ARCH go build -ldflags="-s -w" -o "dist/${BIN}${EXT}" ./cmd/kwtsms/
+
+            # Package
+            ARCHIVE="kwtsms-${TAG}-${OS}-${ARCH}"
+            cd dist
+            if [ "$OS" = "windows" ]; then
+              zip "../${ARCHIVE}.zip" "${BIN}${EXT}"
+            else
+              tar czf "../${ARCHIVE}.tar.gz" "${BIN}"
+            fi
+            rm "${BIN}${EXT}"
+            cd ..
+          done
 
       - name: Create GitHub Release
         env:
@@ -30,4 +61,6 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           gh release create "$TAG" \
             --title "$TAG" \
-            --notes-file release-notes.md
+            --notes-file release-notes.md \
+            kwtsms-${TAG}-*.tar.gz \
+            kwtsms-${TAG}-*.zip
