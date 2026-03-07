@@ -25,7 +25,7 @@ SPACES_AROUND = spaced_value
 `
 	os.WriteFile(path, []byte(content), 0644)
 
-	env := loadEnvFile(path)
+	env := LoadEnvFile(path)
 
 	tests := []struct {
 		key  string
@@ -56,7 +56,7 @@ SPACES_AROUND = spaced_value
 }
 
 func TestLoadEnvFileMissing(t *testing.T) {
-	env := loadEnvFile("/nonexistent/path/.env")
+	env := LoadEnvFile("/nonexistent/path/.env")
 	if len(env) != 0 {
 		t.Errorf("expected empty map for missing file, got %v", env)
 	}
@@ -67,7 +67,7 @@ func TestLoadEnvFileEmpty(t *testing.T) {
 	path := filepath.Join(dir, ".env")
 	os.WriteFile(path, []byte(""), 0644)
 
-	env := loadEnvFile(path)
+	env := LoadEnvFile(path)
 	if len(env) != 0 {
 		t.Errorf("expected empty map for empty file, got %v", env)
 	}

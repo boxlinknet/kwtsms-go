@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-07
+
+### Added
+
+- `WithHTTPClient` option for dependency injection (enables testable HTTP clients)
+- Enhanced setup wizard: loads existing `.env` defaults, fetches sender IDs for selection, log file prompt with "off" option, test/live mode menu, newline sanitization
+- CLI tests: 37 unit tests covering all commands, setup wizard flows, auto-setup
+- Bulk send integration tests: 250-number send with balance verification (library and CLI)
+- Raw API example (example 00): all 7 endpoints with zero dependencies
+- `\r`/`\n` stripping in `New()` constructor to prevent Windows line ending corruption in credentials
+
+### Changed
+
+- `request()` is now a method on `KwtSMS` (was a standalone function), uses per-instance HTTP client
+- `LoadEnvFile` exported for CLI and external consumers
+- CLI refactored to `app` struct pattern for testability (injected I/O, exit codes instead of `os.Exit`)
+- Setup wizard sanitizes credentials before verification (was after)
+
 ## [0.2.0] - 2026-03-06
 
 ### Added
@@ -53,5 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CodeQL security scanning and Dependabot dependency updates
 - Five runnable examples: basic usage, OTP flow, bulk SMS, HTTP handler, error handling
 
+[0.3.0]: https://github.com/boxlinknet/kwtsms-go/releases/tag/v0.3.0
 [0.2.0]: https://github.com/boxlinknet/kwtsms-go/releases/tag/v0.2.0
 [0.1.0]: https://github.com/boxlinknet/kwtsms-go/releases/tag/v0.1.0

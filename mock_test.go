@@ -16,20 +16,15 @@ func withMockServer(t *testing.T, handler http.HandlerFunc, fn func(c *KwtSMS)) 
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	// We need to temporarily point the request function at our mock server.
-	// Since baseURL is a package-level const, we override httpClient with a
-	// custom transport that redirects requests.
-	origClient := httpClient
-	httpClient = &http.Client{
+	mockHTTP := &http.Client{
 		Transport: &rewriteTransport{
 			base:    http.DefaultTransport,
 			fromURL: baseURL,
 			toURL:   server.URL + "/API/",
 		},
 	}
-	defer func() { httpClient = origClient }()
 
-	c, _ := New("testuser", "testpass", WithTestMode(true), WithLogFile(""))
+	c, _ := New("testuser", "testpass", WithTestMode(true), WithLogFile(""), WithHTTPClient(mockHTTP))
 	fn(c)
 }
 
@@ -339,7 +334,6 @@ func TestMockSendERR999UnknownCode(t *testing.T) {
 func TestMockNetworkError(t *testing.T) {
 	// Use a server that closes immediately
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Close connection without response
 		hj, ok := w.(http.Hijacker)
 		if ok {
 			conn, _, _ := hj.Hijack()
@@ -348,17 +342,15 @@ func TestMockNetworkError(t *testing.T) {
 	}))
 	server.Close() // Close immediately to simulate network error
 
-	origClient := httpClient
-	httpClient = &http.Client{
+	mockHTTP := &http.Client{
 		Transport: &rewriteTransport{
 			base:    http.DefaultTransport,
 			fromURL: baseURL,
 			toURL:   server.URL + "/API/",
 		},
 	}
-	defer func() { httpClient = origClient }()
 
-	c, _ := New("user", "pass", WithLogFile(""))
+	c, _ := New("user", "pass", WithLogFile(""), WithHTTPClient(mockHTTP))
 	result, _ := c.Send("96598765432", "Hello", "")
 	if result.Result != "ERROR" {
 		t.Error("network error should return ERROR result")

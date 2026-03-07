@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// loadEnvFile parses a .env file into a map of key=value pairs.
+// LoadEnvFile parses a .env file into a map of key=value pairs.
 // Returns an empty map if the file does not exist or cannot be read.
 // Never panics or returns an error.
 //
@@ -14,7 +14,7 @@ import (
 //   - Strips inline # comments from unquoted values
 //   - Supports quoted values: KWTSMS_SENDER_ID="MY APP" -> MY APP
 //   - Does NOT modify os environment variables (read-only parsing)
-func loadEnvFile(path string) map[string]string {
+func LoadEnvFile(path string) map[string]string {
 	env := make(map[string]string)
 
 	data, err := os.ReadFile(path)

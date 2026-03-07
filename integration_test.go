@@ -3,6 +3,7 @@
 package kwtsms
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -20,6 +21,16 @@ func getIntegrationClient(t *testing.T) *KwtSMS {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	return c
+}
+
+// getBalance returns the current live balance for an integration client.
+func getBalance(t *testing.T, c *KwtSMS) float64 {
+	t.Helper()
+	bal, err := c.Balance()
+	if err != nil {
+		t.Fatalf("Balance() error: %v", err)
+	}
+	return bal
 }
 
 func TestIntegrationVerifySuccess(t *testing.T) {
@@ -67,18 +78,27 @@ func TestIntegrationBalance(t *testing.T) {
 
 func TestIntegrationSendValidKuwaitNumber(t *testing.T) {
 	c := getIntegrationClient(t)
+	initialBalance := getBalance(t, c)
+	t.Logf("Initial balance: %.2f", initialBalance)
 
 	result, err := c.Send("96598765432", "Go client integration test", "")
 	if err != nil {
 		t.Fatalf("Send error: %v", err)
 	}
-	// In test mode, we expect OK or an expected error
 	t.Logf("Send result: %s (code: %s)", result.Result, result.Code)
 	if result.Result == "OK" {
 		if result.MsgID == "" {
 			t.Error("msg-id should be set on success")
 		}
-		t.Logf("msg-id: %s, balance-after: %.2f", result.MsgID, result.BalanceAfter)
+		t.Logf("msg-id: %s, points-charged: %d, balance-after: %.2f",
+			result.MsgID, result.PointsCharged, result.BalanceAfter)
+
+		// Verify balance math: balance-after == initial - points-charged
+		expectedBalance := initialBalance - float64(result.PointsCharged)
+		if result.BalanceAfter != expectedBalance {
+			t.Errorf("balance mismatch: initial(%.2f) - points-charged(%d) = %.2f, but balance-after = %.2f",
+				initialBalance, result.PointsCharged, expectedBalance, result.BalanceAfter)
+		}
 	}
 }
 
@@ -110,6 +130,8 @@ func TestIntegrationSendInvalidInput(t *testing.T) {
 
 func TestIntegrationSendMixedValidInvalid(t *testing.T) {
 	c := getIntegrationClient(t)
+	initialBalance := getBalance(t, c)
+	t.Logf("Initial balance: %.2f", initialBalance)
 
 	result, err := c.SendMulti(
 		[]string{"96598765432", "bad@email.com", "123"},
@@ -123,7 +145,16 @@ func TestIntegrationSendMixedValidInvalid(t *testing.T) {
 	if len(result.Invalid) != 2 {
 		t.Errorf("expected 2 invalid entries, got %d", len(result.Invalid))
 	}
-	t.Logf("Result: %s, Invalid: %d", result.Result, len(result.Invalid))
+	t.Logf("Result: %s, Invalid: %d, points-charged: %d, balance-after: %.2f",
+		result.Result, len(result.Invalid), result.PointsCharged, result.BalanceAfter)
+
+	if result.Result == "OK" {
+		expectedBalance := initialBalance - float64(result.PointsCharged)
+		if result.BalanceAfter != expectedBalance {
+			t.Errorf("balance mismatch: initial(%.2f) - points-charged(%d) = %.2f, but balance-after = %.2f",
+				initialBalance, result.PointsCharged, expectedBalance, result.BalanceAfter)
+		}
+	}
 }
 
 func TestIntegrationSendNormalization(t *testing.T) {
@@ -140,6 +171,8 @@ func TestIntegrationSendNormalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			initialBalance := getBalance(t, c)
+
 			result, err := c.Send(tt.mobile, "Normalization test", "")
 			if err != nil {
 				t.Fatal(err)
@@ -148,13 +181,24 @@ func TestIntegrationSendNormalization(t *testing.T) {
 			if result.Code == "ERR025" || result.Code == "ERR006" {
 				t.Errorf("normalization should handle %q, got %s", tt.mobile, result.Code)
 			}
-			t.Logf("%s: result=%s code=%s", tt.name, result.Result, result.Code)
+			t.Logf("%s: result=%s code=%s points-charged=%d balance-after=%.2f",
+				tt.name, result.Result, result.Code, result.PointsCharged, result.BalanceAfter)
+
+			if result.Result == "OK" {
+				expectedBalance := initialBalance - float64(result.PointsCharged)
+				if result.BalanceAfter != expectedBalance {
+					t.Errorf("balance mismatch: initial(%.2f) - points-charged(%d) = %.2f, but balance-after = %.2f",
+						initialBalance, result.PointsCharged, expectedBalance, result.BalanceAfter)
+				}
+			}
 		})
 	}
 }
 
 func TestIntegrationSendDeduplication(t *testing.T) {
 	c := getIntegrationClient(t)
+	initialBalance := getBalance(t, c)
+	t.Logf("Initial balance: %.2f", initialBalance)
 
 	// All normalize to the same number
 	result, err := c.SendMulti(
@@ -170,7 +214,16 @@ func TestIntegrationSendDeduplication(t *testing.T) {
 	if result.Result == "OK" && result.Numbers > 1 {
 		t.Errorf("dedup should send to 1 number, got %d", result.Numbers)
 	}
-	t.Logf("Dedup result: %s, numbers=%d", result.Result, result.Numbers)
+	t.Logf("Dedup result: %s, numbers=%d, points-charged=%d, balance-after=%.2f",
+		result.Result, result.Numbers, result.PointsCharged, result.BalanceAfter)
+
+	if result.Result == "OK" {
+		expectedBalance := initialBalance - float64(result.PointsCharged)
+		if result.BalanceAfter != expectedBalance {
+			t.Errorf("balance mismatch: initial(%.2f) - points-charged(%d) = %.2f, but balance-after = %.2f",
+				initialBalance, result.PointsCharged, expectedBalance, result.BalanceAfter)
+		}
+	}
 }
 
 func TestIntegrationSenderIDs(t *testing.T) {
@@ -213,19 +266,138 @@ func TestIntegrationValidate(t *testing.T) {
 
 func TestIntegrationSendEmptySenderID(t *testing.T) {
 	c := getIntegrationClient(t)
-	// Use a blank sender to test API behavior
+	initialBalance := getBalance(t, c)
+
 	result, err := c.Send("96598765432", "Empty sender test", " ")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("Empty sender: result=%s code=%s", result.Result, result.Code)
+	t.Logf("Empty sender: result=%s code=%s points-charged=%d balance-after=%.2f",
+		result.Result, result.Code, result.PointsCharged, result.BalanceAfter)
+
+	if result.Result == "OK" {
+		expectedBalance := initialBalance - float64(result.PointsCharged)
+		if result.BalanceAfter != expectedBalance {
+			t.Errorf("balance mismatch: initial(%.2f) - points-charged(%d) = %.2f, but balance-after = %.2f",
+				initialBalance, result.PointsCharged, expectedBalance, result.BalanceAfter)
+		}
+	}
 }
 
 func TestIntegrationSendWrongSenderID(t *testing.T) {
 	c := getIntegrationClient(t)
+	initialBalance := getBalance(t, c)
+
 	result, err := c.Send("96598765432", "Wrong sender test", "NONEXISTENT-SENDER-XYZ")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("Wrong sender: result=%s code=%s action=%s", result.Result, result.Code, result.Action)
+	t.Logf("Wrong sender: result=%s code=%s action=%s points-charged=%d balance-after=%.2f",
+		result.Result, result.Code, result.Action, result.PointsCharged, result.BalanceAfter)
+
+	if result.Result == "OK" {
+		expectedBalance := initialBalance - float64(result.PointsCharged)
+		if result.BalanceAfter != expectedBalance {
+			t.Errorf("balance mismatch: initial(%.2f) - points-charged(%d) = %.2f, but balance-after = %.2f",
+				initialBalance, result.PointsCharged, expectedBalance, result.BalanceAfter)
+		}
+	}
+}
+
+func TestIntegrationBulkSend250(t *testing.T) {
+	c := getIntegrationClient(t)
+
+	// 1. Get initial balance
+	initialBalance := getBalance(t, c)
+	t.Logf("Initial balance: %.2f", initialBalance)
+
+	// 2. Derive per-number credit rate from a single-number send
+	probe, err := c.Send("96599229999", "Rate probe", "")
+	if err != nil {
+		t.Fatalf("Rate probe send error: %v", err)
+	}
+	if probe.Result != "OK" {
+		t.Fatalf("Rate probe failed: %s (code=%s)", probe.Result, probe.Code)
+	}
+	creditsPerNumber := float64(probe.PointsCharged) / float64(probe.Numbers)
+	t.Logf("Rate probe: %d points for %d number(s) = %.2f credits/number",
+		probe.PointsCharged, probe.Numbers, creditsPerNumber)
+
+	// Update initial balance to account for the probe send
+	initialBalance = probe.BalanceAfter
+	t.Logf("Balance after probe: %.2f", initialBalance)
+
+	// 3. Generate 250 unique Kuwait numbers: 96599220000..96599220249
+	const numRecipients = 250
+	expectedCredits := int(creditsPerNumber) * numRecipients
+	t.Logf("Expected credits for %d numbers: %d (%.2f x %d)",
+		numRecipients, expectedCredits, creditsPerNumber, numRecipients)
+
+	// Verify sufficient balance before commencing
+	if initialBalance < float64(expectedCredits) {
+		t.Fatalf("Insufficient balance: have %.2f, need %d credits for %d numbers",
+			initialBalance, expectedCredits, numRecipients)
+	}
+
+	numbers := make([]string, numRecipients)
+	for i := range numbers {
+		numbers[i] = fmt.Sprintf("9659922%04d", i)
+	}
+	mobile := strings.Join(numbers, ",")
+
+	// 4. Call Send() once — internally triggers sendBulk (2 batches: 200 + 50)
+	result, err := c.Send(mobile, "Go bulk test 250 numbers", "")
+	if err != nil {
+		t.Fatalf("Send error: %v", err)
+	}
+
+	t.Logf("Bulk result:    %s", result.Result)
+	t.Logf("  Numbers:        %d", result.Numbers)
+	t.Logf("  PointsCharged:  %d", result.PointsCharged)
+	t.Logf("  BalanceAfter:   %.2f", result.BalanceAfter)
+	t.Logf("  MsgID (batch1): %s", result.MsgID)
+
+	if result.Result != "OK" {
+		t.Fatalf("expected OK, got %s (code=%s desc=%s action=%s)",
+			result.Result, result.Code, result.Description, result.Action)
+	}
+
+	// Should have accepted all 250 numbers across 2 batches
+	if result.Numbers != numRecipients {
+		t.Errorf("expected %d numbers, got %d", numRecipients, result.Numbers)
+	}
+
+	if result.MsgID == "" {
+		t.Fatal("expected non-empty msg-id from first batch")
+	}
+
+	// 5. Verify credit consumption: points-charged == numbers * rate
+	if result.PointsCharged != expectedCredits {
+		t.Errorf("expected %d points-charged (%d x %.0f), got %d",
+			expectedCredits, numRecipients, creditsPerNumber, result.PointsCharged)
+	}
+
+	// 6. Verify balance math: balance-after == initial - points-charged
+	expectedBalance := initialBalance - float64(result.PointsCharged)
+	if result.BalanceAfter != expectedBalance {
+		t.Errorf("balance mismatch: initial(%.2f) - points-charged(%d) = %.2f, but balance-after = %.2f",
+			initialBalance, result.PointsCharged, expectedBalance, result.BalanceAfter)
+	}
+
+	// 7. Cached balance should match the response
+	if cb := c.CachedBalance(); cb == nil {
+		t.Error("CachedBalance should be set after bulk send")
+	} else if *cb != result.BalanceAfter {
+		t.Errorf("CachedBalance=%.2f != BalanceAfter=%.2f", *cb, result.BalanceAfter)
+	}
+
+	// 8. Check status of the sent message — expect ERR030 for test=1
+	statusResult := c.Status(result.MsgID)
+	statusCode, _ := statusResult["code"].(string)
+	statusResultStr, _ := statusResult["result"].(string)
+	t.Logf("Status(%s): result=%s code=%s", result.MsgID, statusResultStr, statusCode)
+
+	if statusCode != "ERR030" {
+		t.Logf("NOTE: expected ERR030 for test-mode message, got %q — this may vary by timing", statusCode)
+	}
 }

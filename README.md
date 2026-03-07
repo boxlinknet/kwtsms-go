@@ -400,21 +400,28 @@ Raw API errors are for developers, not end users. Map them for your UI:
 
 ## Phone Number Formats
 
-All phone number formats are normalized automatically before sending:
+All formats are accepted and normalized automatically:
 
-| Input | Normalized | Notes |
-|-------|-----------|-------|
-| `96598765432` | `96598765432` | Already correct |
-| `+96598765432` | `96598765432` | `+` prefix stripped |
-| `0096598765432` | `96598765432` | `00` prefix stripped |
-| `965 9876 5432` | `96598765432` | Spaces stripped |
-| `965-9876-5432` | `96598765432` | Dashes stripped |
-| `(965) 9876-5432` | `96598765432` | Parentheses stripped |
-| `965.9876.5432` | `96598765432` | Dots stripped |
-| `٩٦٥٩٨٧٦٥٤٣٢` | `96598765432` | Arabic-Indic digits converted to Latin |
-| `۹۶۵۹۸۷۶۵۴۳۲` | `96598765432` | Persian/Extended Arabic-Indic digits converted to Latin |
+| Input | Normalized | Valid? |
+|-------|-----------|--------|
+| `96598765432` | `96598765432` | Yes |
+| `+96598765432` | `96598765432` | Yes |
+| `0096598765432` | `96598765432` | Yes |
+| `965 9876 5432` | `96598765432` | Yes |
+| `965-9876-5432` | `96598765432` | Yes |
+| `(965) 98765432` | `96598765432` | Yes |
+| `965.9876.5432` | `96598765432` | Yes |
+| `٩٦٥٩٨٧٦٥٤٣٢` | `96598765432` | Yes |
+| `۹۶۵۹۸۷۶۵۴۳۲` | `96598765432` | Yes |
+| `+٩٦٥٩٨٧٦٥٤٣٢` | `96598765432` | Yes |
+| `٠٠٩٦٥٩٨٧٦٥٤٣٢` | `96598765432` | Yes |
+| `٩٦٥ ٩٨٧٦ ٥٤٣٢` | `96598765432` | Yes |
+| `٩٦٥-٩٨٧٦-٥٤٣٢` | `96598765432` | Yes |
+| `965٩٨٧٦٥٤٣٢` | `96598765432` | Yes |
+| `123456` (too short) | rejected | No |
+| `user@gmail.com` | rejected | No |
 
-Numbers must be in international format with country code. Digits only, no prefix. Arabic-Indic (U+0660-U+0669) and Persian (U+06F0-U+06F9) digits are converted to Latin automatically.
+Numbers must be in international format with country code. Arabic-Indic (U+0660-U+0669) and Persian (U+06F0-U+06F9) digits are converted to Latin automatically.
 
 ## Test Mode
 
@@ -433,6 +440,8 @@ sms, _ := kwtsms.New("user", "pass", kwtsms.WithTestMode(true))
 Always develop in test mode and switch to live only when ready for production. Test messages appear in the **Sending Queue** at kwtsms.com. Delete them from the queue to recover any tentatively held credits.
 
 ## Sender ID
+
+A **Sender ID** is the name that appears as the sender on the recipient's phone (e.g., "MY-APP" instead of a random number).
 
 | | Promotional | Transactional |
 |--|-------------|---------------|
@@ -509,15 +518,11 @@ For OTP/authentication, you **must** use a Transactional sender ID. Promotional 
 - Send to one number per request (avoid ERR028 batch rejection)
 - Use a Transactional sender ID (not Promotional)
 
-### 6. Timezone
-
-`unix-timestamp` in API responses is **GMT+3 (Asia/Kuwait server time), not UTC**. Always convert when storing or displaying. Log timestamps written by the client are always UTC ISO-8601.
-
-### 7. Rate limiting
+### 6. Rate limiting
 
 Wait at least **15 seconds** before sending to the same number again (ERR028). The entire request is rejected if any number in a batch triggers this, even if other numbers are fine.
 
-### 8. Monitoring and alerting
+### 7. Monitoring and alerting
 
 Set up alerts for:
 - Failed sends: sudden increase in error responses
@@ -525,13 +530,17 @@ Set up alerts for:
 - Error rate spikes: especially ERR003 (credentials), ERR010/ERR011 (balance), ERR028 (rate limit)
 - Queue buildup: messages stuck in kwtSMS queue (check via dashboard)
 
-### 9. Keep libraries updated
+### 8. Keep libraries updated
 
 Monitor for security patches and updates to the kwtSMS client library. Subscribe to kwtSMS announcements for API changes.
 
-### 10. Compliance
+### 9. Compliance
 
 Stay informed about local telecom regulations regarding sender IDs, message content, and user consent. Promotional SMS may require opt-in consent from recipients. Different countries have different rules: check before enabling international coverage.
+
+## Timestamps
+
+`unix-timestamp` values in API responses are in **GMT+3 (Asia/Kuwait)** server time, not UTC. Convert when storing or displaying. Log timestamps written by the client are always UTC ISO-8601.
 
 ## Security Checklist
 
@@ -568,6 +577,7 @@ See the [examples/](examples/) directory for runnable code:
 
 | Example | Description |
 |---------|-------------|
+| [00-raw-api](examples/00-raw-api/) | Call every kwtSMS endpoint using only the Go standard library (no dependencies) |
 | [01-basic-usage](examples/01-basic-usage/) | Load credentials, verify, send SMS, print result |
 | [02-otp-flow](examples/02-otp-flow/) | Generate OTP, validate phone, send, save msg-id |
 | [03-bulk-sms](examples/03-bulk-sms/) | Send to multiple numbers with mixed formats |
@@ -618,17 +628,20 @@ You are using the wrong credentials. The API requires your **API username and AP
 
 **5. Can I send to international numbers (outside Kuwait)?**
 
-International sending is **disabled by default** on kwtSMS accounts. Contact kwtSMS support to request activation for specific country prefixes. Use `Coverage()` to check which countries are currently active on your account. Be aware that activating international coverage increases exposure to automated abuse. Implement rate limiting and CAPTCHA before enabling.
+International sending is **disabled by default** on kwtSMS accounts. [Log in to your kwtSMS account](https://www.kwtsms.com/login/) and add coverage for the country prefixes you need. Use `Coverage()` to check which countries are currently active on your account. Be aware that activating international coverage increases exposure to automated abuse. Implement rate limiting and CAPTCHA before enabling.
 
 ## Help & Support
 
-- **[kwtSMS FAQ](https://www.kwtsms.com/faq/)** — Answers to common questions about credits, sender IDs, OTP, and delivery
-- **[kwtSMS Support](https://www.kwtsms.com/support.html)** — Open a support ticket or browse help articles
-- **[Contact kwtSMS](https://www.kwtsms.com/#contact)** — Reach the kwtSMS team directly for Sender ID registration and account issues
-- **[API Documentation (PDF)](https://www.kwtsms.com/doc/KwtSMS.com_API_Documentation_v41.pdf)** — kwtSMS REST API v4.1 full reference
-- **[kwtSMS Dashboard](https://www.kwtsms.com/login/)** — Recharge credits, buy Sender IDs, view message logs, manage coverage
-- **[Other Integrations](https://www.kwtsms.com/integrations.html)** — Plugins and integrations for other platforms and languages
-- **[Library Issues](https://github.com/boxlinknet/kwtsms-go/issues)** — Report bugs or request features for this Go client
+- **[kwtSMS FAQ](https://www.kwtsms.com/faq/)**: Answers to common questions about credits, sender IDs, OTP, and delivery
+- **[kwtSMS Support](https://www.kwtsms.com/support.html)**: Open a support ticket or browse help articles
+- **[Contact kwtSMS](https://www.kwtsms.com/#contact)**: Reach the kwtSMS team directly for Sender ID registration and account issues
+- **[API Documentation (PDF)](https://www.kwtsms.com/doc/KwtSMS.com_API_Documentation_v41.pdf)**: kwtSMS REST API v4.1 full reference
+- **[Best Practices](https://www.kwtsms.com/articles/sms-api-implementation-best-practices.html)**: SMS API implementation best practices
+- **[Integration Test Checklist](https://www.kwtsms.com/articles/sms-api-integration-test-checklist.html)**: Pre-launch testing checklist
+- **[Sender ID Help](https://www.kwtsms.com/sender-id-help.html)**: Sender ID registration and guidelines
+- **[kwtSMS Dashboard](https://www.kwtsms.com/login/)**: Recharge credits, buy Sender IDs, view message logs, manage coverage
+- **[Other Integrations](https://www.kwtsms.com/integrations.html)**: Plugins and integrations for other platforms and languages
+- **[Library Issues](https://github.com/boxlinknet/kwtsms-go/issues)**: Report bugs or request features for this Go client
 
 ## License
 

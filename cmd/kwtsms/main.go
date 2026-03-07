@@ -4,66 +4,92 @@
 //
 // Usage:
 //
-//	kwtsms verify                                  # test credentials, show balance
-//	kwtsms balance                                 # show available + purchased credits
-//	kwtsms senderid                                # list sender IDs
-//	kwtsms coverage                                # list active country prefixes
-//	kwtsms send <mobile> <message> [--sender ID]   # send SMS
-//	kwtsms validate <number> [number2 ...]         # validate numbers
-//	kwtsms status <msg-id>                         # check message status
-//	kwtsms dlr <msg-id>                            # delivery report (intl only)
+//	kwtsms setup                                     Interactive setup wizard
+//	kwtsms verify                                    Test credentials, show balance
+//	kwtsms balance                                   Show available + purchased credits
+//	kwtsms senderid                                  List sender IDs
+//	kwtsms coverage                                  List active country prefixes
+//	kwtsms send <mobile> <message> [--sender ID]     Send SMS
+//	kwtsms validate <number> [number2 ...]           Validate phone numbers
+//	kwtsms status <msg-id>                           Check message status
+//	kwtsms dlr <msg-id>                              Delivery report (intl only)
 package main
 
 import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	kwtsms "github.com/boxlinknet/kwtsms-go"
 )
 
+type app struct {
+	stdin     io.Reader
+	stdout    io.Writer
+	stderr    io.Writer
+	envFile   string
+	newClient func() (*kwtsms.KwtSMS, error)
+	extraOpts []kwtsms.Option // extra options for clients created during setup (testing)
+}
+
 func main() {
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
+	a := &app{
+		stdin:   os.Stdin,
+		stdout:  os.Stdout,
+		stderr:  os.Stderr,
+		envFile: ".env",
+		newClient: func() (*kwtsms.KwtSMS, error) {
+			return kwtsms.FromEnv("")
+		},
+	}
+	os.Exit(a.run(os.Args[1:]))
+}
+
+func (a *app) run(args []string) int {
+	if len(args) == 0 {
+		a.printUsage()
+		return 1
 	}
 
-	cmd := os.Args[1]
-	args := os.Args[2:]
+	cmd := args[0]
+	rest := args[1:]
 
 	switch cmd {
 	case "setup":
-		cmdSetup()
+		return a.cmdSetup()
 	case "verify":
-		cmdVerify()
+		return a.cmdVerify()
 	case "balance":
-		cmdBalance()
+		return a.cmdBalance()
 	case "senderid":
-		cmdSenderID()
+		return a.cmdSenderID()
 	case "coverage":
-		cmdCoverage()
+		return a.cmdCoverage()
 	case "send":
-		cmdSend(args)
+		return a.cmdSend(rest)
 	case "validate":
-		cmdValidate(args)
+		return a.cmdValidate(rest)
 	case "status":
-		cmdStatus(args)
+		return a.cmdStatus(rest)
 	case "dlr":
-		cmdDLR(args)
+		return a.cmdDLR(rest)
 	case "help", "--help", "-h":
-		printUsage()
+		a.printUsage()
+		return 0
 	case "version", "--version", "-v":
-		fmt.Printf("kwtsms %s\n", kwtsms.Version)
+		fmt.Fprintf(a.stdout, "kwtsms %s\n", kwtsms.Version)
+		return 0
 	default:
-		fmt.Fprintf(os.Stderr, "Error: unknown command %q. Run 'kwtsms help' for usage.\n", cmd)
-		os.Exit(1)
+		fmt.Fprintf(a.stderr, "Error: unknown command %q. Run 'kwtsms help' for usage.\n", cmd)
+		return 1
 	}
 }
 
-func printUsage() {
-	fmt.Println(`kwtsms - kwtSMS SMS API client
+func (a *app) printUsage() {
+	fmt.Fprintln(a.stdout, `kwtsms - kwtSMS SMS API client
 
 Usage:
   kwtsms setup                                     Interactive setup wizard
@@ -86,85 +112,108 @@ Environment variables (or .env file):
   KWTSMS_LOG_FILE    Log file path (default: kwtsms.log)`)
 }
 
-func getClient() *kwtsms.KwtSMS {
-	c, err := kwtsms.FromEnv("")
+func (a *app) getClient() (*kwtsms.KwtSMS, int) {
+	c, err := a.newClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n\nSet KWTSMS_USERNAME and KWTSMS_PASSWORD environment variables or create a .env file.\n", err)
-		os.Exit(1)
+		// Auto-setup: if no .env file exists, run setup wizard
+		if _, statErr := os.Stat(a.envFile); os.IsNotExist(statErr) {
+			fmt.Fprintln(a.stdout, "No .env file found. Starting first-time setup...")
+			fmt.Fprintln(a.stdout)
+			if code := a.cmdSetup(); code != 0 {
+				return nil, code
+			}
+			c, err = a.newClient()
+		}
+		if err != nil {
+			fmt.Fprintf(a.stderr, "Error: %v\n\nSet KWTSMS_USERNAME and KWTSMS_PASSWORD environment variables or create a .env file.\nRun 'kwtsms setup' for interactive configuration.\n", err)
+			return nil, 1
+		}
 	}
-	return c
+	return c, 0
 }
 
-func cmdVerify() {
-	c := getClient()
-	if c.CachedBalance() == nil {
-		// Show test mode warning
-		printTestModeWarning(c)
+func (a *app) cmdVerify() int {
+	c, code := a.getClient()
+	if c == nil {
+		return code
 	}
+	a.printTestModeWarning()
 
 	ok, balance, err := c.Verify()
 	if !ok {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(a.stderr, "Error: %v\n", err)
+		return 1
 	}
 
-	fmt.Printf("Credentials OK\n")
-	fmt.Printf("Available balance: %.2f credits\n", balance)
+	fmt.Fprintln(a.stdout, "Credentials OK")
+	fmt.Fprintf(a.stdout, "Available balance: %.2f credits\n", balance)
 	if p := c.CachedPurchased(); p != nil {
-		fmt.Printf("Total purchased:   %.2f credits\n", *p)
+		fmt.Fprintf(a.stdout, "Total purchased:   %.2f credits\n", *p)
 	}
+	return 0
 }
 
-func cmdBalance() {
-	c := getClient()
+func (a *app) cmdBalance() int {
+	c, code := a.getClient()
+	if c == nil {
+		return code
+	}
 	bal, err := c.Balance()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(a.stderr, "Error: %v\n", err)
+		return 1
 	}
-	fmt.Printf("Available: %.2f credits\n", bal)
+	fmt.Fprintf(a.stdout, "Available: %.2f credits\n", bal)
 	if p := c.CachedPurchased(); p != nil {
-		fmt.Printf("Purchased: %.2f credits\n", *p)
+		fmt.Fprintf(a.stdout, "Purchased: %.2f credits\n", *p)
 	}
+	return 0
 }
 
-func cmdSenderID() {
-	c := getClient()
+func (a *app) cmdSenderID() int {
+	c, code := a.getClient()
+	if c == nil {
+		return code
+	}
 	result := c.SenderIDs()
 	if result["result"] != "OK" {
-		printErrorResult(result)
-		os.Exit(1)
+		a.printErrorResult(result)
+		return 1
 	}
 	sids, _ := result["senderids"].([]string)
 	if len(sids) == 0 {
-		fmt.Println("No sender IDs registered on this account.")
-		return
+		fmt.Fprintln(a.stdout, "No sender IDs registered on this account.")
+		return 0
 	}
-	fmt.Println("Sender IDs:")
+	fmt.Fprintln(a.stdout, "Sender IDs:")
 	for _, sid := range sids {
-		fmt.Printf("  %s\n", sid)
+		fmt.Fprintf(a.stdout, "  %s\n", sid)
 	}
+	return 0
 }
 
-func cmdCoverage() {
-	c := getClient()
+func (a *app) cmdCoverage() int {
+	c, code := a.getClient()
+	if c == nil {
+		return code
+	}
 	result := c.Coverage()
 	if result["result"] != "OK" {
-		printErrorResult(result)
-		os.Exit(1)
+		a.printErrorResult(result)
+		return 1
 	}
 	data, _ := json.MarshalIndent(result, "", "  ")
-	fmt.Println(string(data))
+	fmt.Fprintln(a.stdout, string(data))
+	return 0
 }
 
-func cmdSend(args []string) {
+func (a *app) cmdSend(args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintf(os.Stderr, "Usage: kwtsms send <mobile> <message> [--sender ID]\n")
-		os.Exit(1)
+		fmt.Fprintln(a.stderr, "Usage: kwtsms send <mobile> <message> [--sender ID]")
+		return 1
 	}
 
 	mobile := args[0]
-	var message string
 	var sender string
 
 	// Parse args: message and optional --sender flag
@@ -179,48 +228,52 @@ func cmdSend(args []string) {
 		messageParts = append(messageParts, args[i])
 		i++
 	}
-	message = strings.Join(messageParts, " ")
+	message := strings.Join(messageParts, " ")
 
 	if message == "" {
-		fmt.Fprintf(os.Stderr, "Error: message is required\n")
-		os.Exit(1)
+		fmt.Fprintln(a.stderr, "Error: message is required")
+		return 1
 	}
 
-	c := getClient()
-	printTestModeWarning(c)
+	c, code := a.getClient()
+	if c == nil {
+		return code
+	}
+	a.printTestModeWarning()
 
 	result, err := c.Send(mobile, message, sender)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(a.stderr, "Error: %v\n", err)
+		return 1
 	}
 
 	if result.Result == "OK" {
-		fmt.Printf("Message sent successfully\n")
-		fmt.Printf("  msg-id:         %s\n", result.MsgID)
-		fmt.Printf("  numbers:        %d\n", result.Numbers)
-		fmt.Printf("  points-charged: %d\n", result.PointsCharged)
-		fmt.Printf("  balance-after:  %.2f\n", result.BalanceAfter)
+		fmt.Fprintln(a.stdout, "Message sent successfully")
+		fmt.Fprintf(a.stdout, "  msg-id:         %s\n", result.MsgID)
+		fmt.Fprintf(a.stdout, "  numbers:        %d\n", result.Numbers)
+		fmt.Fprintf(a.stdout, "  points-charged: %d\n", result.PointsCharged)
+		fmt.Fprintf(a.stdout, "  balance-after:  %.2f\n", result.BalanceAfter)
 	} else {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", result.Description)
+		fmt.Fprintf(a.stderr, "Error: %s\n", result.Description)
 		if result.Action != "" {
-			fmt.Fprintf(os.Stderr, "Action: %s\n", result.Action)
+			fmt.Fprintf(a.stderr, "Action: %s\n", result.Action)
 		}
-		os.Exit(1)
+		return 1
 	}
 
 	if len(result.Invalid) > 0 {
-		fmt.Printf("\nInvalid numbers skipped:\n")
+		fmt.Fprintln(a.stdout, "\nInvalid numbers skipped:")
 		for _, inv := range result.Invalid {
-			fmt.Printf("  %s: %s\n", inv.Input, inv.Error)
+			fmt.Fprintf(a.stdout, "  %s: %s\n", inv.Input, inv.Error)
 		}
 	}
+	return 0
 }
 
-func cmdValidate(args []string) {
+func (a *app) cmdValidate(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: kwtsms validate <number> [number2 ...]\n")
-		os.Exit(1)
+		fmt.Fprintln(a.stderr, "Usage: kwtsms validate <number> [number2 ...]")
+		return 1
 	}
 
 	// Support comma-separated and space-separated
@@ -234,189 +287,294 @@ func cmdValidate(args []string) {
 		}
 	}
 
-	c := getClient()
+	c, code := a.getClient()
+	if c == nil {
+		return code
+	}
 	result := c.Validate(phones)
 
 	if len(result.OK) > 0 {
-		fmt.Println("Valid (OK):")
+		fmt.Fprintln(a.stdout, "Valid (OK):")
 		for _, n := range result.OK {
-			fmt.Printf("  %s\n", n)
+			fmt.Fprintf(a.stdout, "  %s\n", n)
 		}
 	}
 	if len(result.ER) > 0 {
-		fmt.Println("Format error (ER):")
+		fmt.Fprintln(a.stdout, "Format error (ER):")
 		for _, n := range result.ER {
-			fmt.Printf("  %s\n", n)
+			fmt.Fprintf(a.stdout, "  %s\n", n)
 		}
 	}
 	if len(result.NR) > 0 {
-		fmt.Println("No route (NR):")
+		fmt.Fprintln(a.stdout, "No route (NR):")
 		for _, n := range result.NR {
-			fmt.Printf("  %s\n", n)
+			fmt.Fprintf(a.stdout, "  %s\n", n)
 		}
 	}
 	if len(result.Rejected) > 0 {
-		fmt.Println("Locally rejected:")
+		fmt.Fprintln(a.stdout, "Locally rejected:")
 		for _, r := range result.Rejected {
-			fmt.Printf("  %s: %s\n", r.Input, r.Error)
+			fmt.Fprintf(a.stdout, "  %s: %s\n", r.Input, r.Error)
 		}
 	}
 	if result.Error != "" {
-		fmt.Fprintf(os.Stderr, "\nError: %s\n", result.Error)
-		os.Exit(1)
+		fmt.Fprintf(a.stderr, "\nError: %s\n", result.Error)
+		return 1
 	}
+	return 0
 }
 
-func cmdStatus(args []string) {
+func (a *app) cmdStatus(args []string) int {
 	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "Usage: kwtsms status <msg-id>\n")
-		os.Exit(1)
+		fmt.Fprintln(a.stderr, "Usage: kwtsms status <msg-id>")
+		return 1
 	}
 
-	c := getClient()
+	c, code := a.getClient()
+	if c == nil {
+		return code
+	}
 	result := c.Status(args[0])
 	if result["result"] != "OK" {
-		printErrorResult(result)
-		os.Exit(1)
+		a.printErrorResult(result)
+		return 1
 	}
 	data, _ := json.MarshalIndent(result, "", "  ")
-	fmt.Println(string(data))
+	fmt.Fprintln(a.stdout, string(data))
+	return 0
 }
 
-func cmdDLR(args []string) {
+func (a *app) cmdDLR(args []string) int {
 	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "Usage: kwtsms dlr <msg-id>\n")
-		os.Exit(1)
+		fmt.Fprintln(a.stderr, "Usage: kwtsms dlr <msg-id>")
+		return 1
 	}
 
-	c := getClient()
+	c, code := a.getClient()
+	if c == nil {
+		return code
+	}
 	result := c.DLR(args[0])
 	if result["result"] != "OK" {
-		printErrorResult(result)
-		os.Exit(1)
+		a.printErrorResult(result)
+		return 1
 	}
 	data, _ := json.MarshalIndent(result, "", "  ")
-	fmt.Println(string(data))
+	fmt.Fprintln(a.stdout, string(data))
+	return 0
 }
 
-func printErrorResult(result map[string]any) {
+func (a *app) printErrorResult(result map[string]any) {
 	desc, _ := result["description"].(string)
 	code, _ := result["code"].(string)
 	action, _ := result["action"].(string)
 
 	if desc != "" {
-		fmt.Fprintf(os.Stderr, "Error: %s", desc)
+		fmt.Fprintf(a.stderr, "Error: %s", desc)
 		if code != "" {
-			fmt.Fprintf(os.Stderr, " (%s)", code)
+			fmt.Fprintf(a.stderr, " (%s)", code)
 		}
-		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(a.stderr)
 	} else if code != "" {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", code)
+		fmt.Fprintf(a.stderr, "Error: %s\n", code)
 	}
 	if action != "" {
-		fmt.Fprintf(os.Stderr, "Action: %s\n", action)
+		fmt.Fprintf(a.stderr, "Action: %s\n", action)
 	}
 }
 
-func cmdSetup() {
-	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Println("kwtsms setup wizard")
-	fmt.Println("-------------------")
-	fmt.Println()
-
-	// Check if .env already exists
-	if _, err := os.Stat(".env"); err == nil {
-		fmt.Print(".env file already exists. Overwrite? [y/N]: ")
-		line, _ := reader.ReadString('\n')
-		line = strings.TrimSpace(strings.ToLower(line))
-		if line != "y" && line != "yes" {
-			fmt.Println("Aborted.")
-			return
-		}
-		fmt.Println()
+func (a *app) printTestModeWarning() {
+	if os.Getenv("KWTSMS_TEST_MODE") == "1" {
+		fmt.Fprintln(a.stdout, "WARNING: Test mode is ON. Messages will be queued but NOT delivered.")
 	}
+}
+
+func (a *app) cmdSetup() int {
+	reader := bufio.NewReader(a.stdin)
+
+	fmt.Fprintln(a.stdout, "\n-- kwtSMS Setup -------------------------------------------------------")
+	fmt.Fprintln(a.stdout, "Verifies your API credentials and creates a .env file.")
+	fmt.Fprintln(a.stdout, "Press Enter to keep the value shown in brackets.")
+	fmt.Fprintln(a.stdout)
+
+	// Load existing .env for defaults
+	existing := kwtsms.LoadEnvFile(a.envFile)
 
 	// Username
-	fmt.Print("API username: ")
+	defaultUser := existing["KWTSMS_USERNAME"]
+	if defaultUser != "" {
+		fmt.Fprintf(a.stdout, "API username [%s]: ", defaultUser)
+	} else {
+		fmt.Fprint(a.stdout, "API username: ")
+	}
 	username, _ := reader.ReadString('\n')
 	username = strings.TrimSpace(username)
 	if username == "" {
-		fmt.Fprintln(os.Stderr, "Error: username is required")
-		os.Exit(1)
+		username = defaultUser
+	}
+	if username == "" {
+		fmt.Fprintln(a.stderr, "Error: username is required")
+		return 1
 	}
 
 	// Password
-	fmt.Print("API password: ")
+	defaultPass := existing["KWTSMS_PASSWORD"]
+	if defaultPass != "" {
+		fmt.Fprint(a.stdout, "API password [keep existing]: ")
+	} else {
+		fmt.Fprint(a.stdout, "API password: ")
+	}
 	password, _ := reader.ReadString('\n')
 	password = strings.TrimSpace(password)
 	if password == "" {
-		fmt.Fprintln(os.Stderr, "Error: password is required")
-		os.Exit(1)
+		password = defaultPass
+	}
+	if password == "" {
+		fmt.Fprintln(a.stderr, "Error: password is required")
+		return 1
 	}
 
-	// Sender ID
-	fmt.Print("Sender ID [KWT-SMS]: ")
-	senderID, _ := reader.ReadString('\n')
-	senderID = strings.TrimSpace(senderID)
-	if senderID == "" {
-		senderID = "KWT-SMS"
-	}
-
-	// Test mode
-	fmt.Print("Enable test mode? [Y/n]: ")
-	testLine, _ := reader.ReadString('\n')
-	testLine = strings.TrimSpace(strings.ToLower(testLine))
-	testMode := "1"
-	if testLine == "n" || testLine == "no" {
-		testMode = "0"
-	}
-
-	fmt.Println()
-	fmt.Println("Verifying credentials...")
+	// Sanitize early: strip \r and \n from credentials before using them
+	replacer := strings.NewReplacer("\r", "", "\n", "")
+	username = replacer.Replace(username)
+	password = replacer.Replace(password)
 
 	// Verify credentials
-	c, err := kwtsms.New(username, password)
+	fmt.Fprint(a.stdout, "\nVerifying credentials... ")
+
+	opts := []kwtsms.Option{kwtsms.WithLogFile("")}
+	opts = append(opts, a.extraOpts...)
+	c, err := kwtsms.New(username, password, opts...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintln(a.stdout, "FAILED")
+		fmt.Fprintf(a.stderr, "Error: %v\n", err)
+		return 1
 	}
 
 	ok, balance, verifyErr := c.Verify()
 	if !ok {
-		fmt.Fprintf(os.Stderr, "Error: credentials are not valid: %v\n", verifyErr)
-		fmt.Fprintln(os.Stderr, "Fix your username/password and run 'kwtsms setup' again.")
-		os.Exit(1)
+		fmt.Fprintln(a.stdout, "FAILED")
+		fmt.Fprintf(a.stderr, "Error: %v\n", verifyErr)
+		fmt.Fprintln(a.stderr, "Fix your username/password and run 'kwtsms setup' again.")
+		return 1
+	}
+	fmt.Fprintf(a.stdout, "OK (Balance: %.2f)\n", balance)
+
+	// Fetch Sender IDs
+	fmt.Fprint(a.stdout, "Fetching Sender IDs... ")
+	sidResult := c.SenderIDs()
+	sids, _ := sidResult["senderids"].([]string)
+
+	defaultSID := existing["KWTSMS_SENDER_ID"]
+	var senderID string
+
+	if len(sids) > 0 {
+		fmt.Fprintln(a.stdout, "OK")
+		fmt.Fprintln(a.stdout, "\nAvailable Sender IDs:")
+		for i, sid := range sids {
+			fmt.Fprintf(a.stdout, "  %d. %s\n", i+1, sid)
+		}
+		if defaultSID == "" {
+			defaultSID = sids[0]
+		}
+		fmt.Fprintf(a.stdout, "\nSelect Sender ID (number or name) [%s]: ", defaultSID)
+		choice, _ := reader.ReadString('\n')
+		choice = strings.TrimSpace(choice)
+		if choice == "" {
+			senderID = defaultSID
+		} else {
+			// Check if choice is a number index
+			idx := 0
+			isNum := true
+			for _, ch := range choice {
+				if ch >= '0' && ch <= '9' {
+					idx = idx*10 + int(ch-'0')
+				} else {
+					isNum = false
+					break
+				}
+			}
+			if isNum && idx >= 1 && idx <= len(sids) {
+				senderID = sids[idx-1]
+			} else {
+				senderID = choice
+			}
+		}
+	} else {
+		fmt.Fprintln(a.stdout, "(none returned)")
+		if defaultSID == "" {
+			defaultSID = "KWT-SMS"
+		}
+		fmt.Fprintf(a.stdout, "Sender ID [%s]: ", defaultSID)
+		sid, _ := reader.ReadString('\n')
+		senderID = strings.TrimSpace(sid)
+		if senderID == "" {
+			senderID = defaultSID
+		}
 	}
 
-	fmt.Printf("Credentials OK (balance: %.2f credits)\n", balance)
-	fmt.Println()
-
-	// Write .env file
-	envContent := fmt.Sprintf("KWTSMS_USERNAME=%s\nKWTSMS_PASSWORD=%s\nKWTSMS_SENDER_ID=%s\nKWTSMS_TEST_MODE=%s\nKWTSMS_LOG_FILE=kwtsms.log\n",
-		username, password, senderID, testMode)
-
-	if err := os.WriteFile(".env", []byte(envContent), 0600); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing .env file: %v\n", err)
-		os.Exit(1)
+	// Send mode
+	currentMode := existing["KWTSMS_TEST_MODE"]
+	modeDefault := "1"
+	if currentMode == "0" {
+		modeDefault = "2"
+	}
+	fmt.Fprintln(a.stdout, "\nSend mode:")
+	fmt.Fprintln(a.stdout, "  1. Test mode: messages queued but NOT delivered, no credits consumed  [default]")
+	fmt.Fprintln(a.stdout, "  2. Live mode: messages delivered to handsets, credits consumed")
+	fmt.Fprintf(a.stdout, "\nChoose [%s]: ", modeDefault)
+	modeLine, _ := reader.ReadString('\n')
+	modeLine = strings.TrimSpace(modeLine)
+	if modeLine == "" {
+		modeLine = modeDefault
+	}
+	testMode := "1"
+	if modeLine == "2" {
+		testMode = "0"
+		fmt.Fprintln(a.stdout, "  -> Live mode selected. Real messages will be sent and credits consumed.")
+	} else {
+		fmt.Fprintln(a.stdout, "  -> Test mode selected.")
 	}
 
-	fmt.Println("Created .env file (permissions: 0600)")
-	fmt.Println()
-	fmt.Println("Next steps:")
-	fmt.Println("  1. Add .env to your .gitignore (never commit credentials)")
-	fmt.Println("  2. Run 'kwtsms verify' to confirm everything works")
-	fmt.Println("  3. Run 'kwtsms send <number> \"test message\"' to send a test SMS")
+	// Log file
+	defaultLog := existing["KWTSMS_LOG_FILE"]
+	if defaultLog == "" {
+		defaultLog = "kwtsms.log"
+	}
+	fmt.Fprintln(a.stdout, "\nAPI logging (every API call is logged to a file, passwords are always masked):")
+	fmt.Fprintf(a.stdout, "  Current: %s\n", defaultLog)
+	fmt.Fprintln(a.stdout, `  Type "off" to disable logging.`)
+	fmt.Fprintf(a.stdout, "  Log file path [%s]: ", defaultLog)
+	logInput, _ := reader.ReadString('\n')
+	logInput = strings.TrimSpace(logInput)
+	logFilePath := defaultLog
+	if strings.ToLower(logInput) == "off" {
+		logFilePath = ""
+		fmt.Fprintln(a.stdout, "  -> Logging disabled.")
+	} else if logInput != "" {
+		logFilePath = logInput
+	}
+
+	// Sanitize remaining fields (username/password already sanitized before verification)
+	senderID = replacer.Replace(senderID)
+	logFilePath = replacer.Replace(logFilePath)
+
+	// Write .env
+	envContent := fmt.Sprintf("# kwtSMS credentials, generated by kwtsms setup\nKWTSMS_USERNAME=%s\nKWTSMS_PASSWORD=%s\nKWTSMS_SENDER_ID=%s\nKWTSMS_TEST_MODE=%s\nKWTSMS_LOG_FILE=%s\n",
+		username, password, senderID, testMode, logFilePath)
+
+	if err := os.WriteFile(a.envFile, []byte(envContent), 0600); err != nil {
+		fmt.Fprintf(a.stderr, "Error writing %s: %v\n", a.envFile, err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stdout, "\n  Saved to %s\n", a.envFile)
 	if testMode == "1" {
-		fmt.Println()
-		fmt.Println("Test mode is ON. Messages will be queued but NOT delivered.")
-		fmt.Println("Set KWTSMS_TEST_MODE=0 in .env when ready for production.")
+		fmt.Fprintln(a.stdout, "  Mode: TEST: messages queued but not delivered (no credits consumed)")
+	} else {
+		fmt.Fprintln(a.stdout, "  Mode: LIVE: messages will be delivered and credits consumed")
 	}
-}
-
-func printTestModeWarning(c *kwtsms.KwtSMS) {
-	// Check via environment since testMode is unexported
-	if os.Getenv("KWTSMS_TEST_MODE") == "1" {
-		fmt.Println("WARNING: Test mode is ON. Messages will be queued but NOT delivered.")
-	}
+	fmt.Fprintln(a.stdout, "  Run 'kwtsms setup' at any time to change settings.")
+	fmt.Fprintln(a.stdout, "----------------------------------------------------------------------")
+	return 0
 }

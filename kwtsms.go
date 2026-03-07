@@ -18,6 +18,7 @@ package kwtsms
 import (
 	"fmt"
 	"math"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -25,7 +26,7 @@ import (
 )
 
 // Version is the library version.
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 // KwtSMS is the kwtSMS API client. Safe for concurrent use.
 type KwtSMS struct {
@@ -33,8 +34,9 @@ type KwtSMS struct {
 	password  string
 	senderID  string
 	testMode  bool
-	logFile   string
-	mu        sync.Mutex
+	logFile    string
+	httpClient *http.Client
+	mu         sync.Mutex
 	balance   *float64
 	purchased *float64
 }
@@ -57,6 +59,11 @@ func WithLogFile(path string) Option {
 	return func(c *KwtSMS) { c.logFile = path }
 }
 
+// WithHTTPClient sets a custom HTTP client. Useful for testing or proxies.
+func WithHTTPClient(c *http.Client) Option {
+	return func(k *KwtSMS) { k.httpClient = c }
+}
+
 // New creates a new KwtSMS client with the given credentials.
 //
 // username and password are your kwtSMS API credentials (not your account
@@ -66,9 +73,11 @@ func New(username, password string, opts ...Option) (*KwtSMS, error) {
 	if username == "" || password == "" {
 		return nil, fmt.Errorf("username and password are required")
 	}
+	// Strip \r and \n that can sneak in from Windows .env files or shell sourcing
+	cr := strings.NewReplacer("\r", "", "\n", "")
 	c := &KwtSMS{
-		username: username,
-		password: password,
+		username: cr.Replace(username),
+		password: cr.Replace(password),
 		senderID: "KWT-SMS",
 		logFile:  "kwtsms.log",
 	}
@@ -88,7 +97,7 @@ func FromEnv(envFile string) (*KwtSMS, error) {
 	if envFile == "" {
 		envFile = ".env"
 	}
-	fileEnv := loadEnvFile(envFile)
+	fileEnv := LoadEnvFile(envFile)
 
 	get := func(key, fallback string) string {
 		if v, ok := os.LookupEnv(key); ok {
@@ -169,7 +178,7 @@ func (c *KwtSMS) setPurchased(v float64) {
 // On failure, error describes the problem with an action to take.
 // Never panics.
 func (c *KwtSMS) Verify() (bool, float64, error) {
-	data, err := request("balance", c.creds(), c.logFile)
+	data, err := c.request("balance", c.creds())
 	if err != nil {
 		return false, 0, err
 	}
@@ -221,7 +230,7 @@ func (c *KwtSMS) Status(msgID string) map[string]any {
 	payload := c.creds()
 	payload["msgid"] = msgID
 
-	data, err := request("status", payload, c.logFile)
+	data, err := c.request("status", payload)
 	if err != nil {
 		return map[string]any{
 			"result":      "ERROR",
@@ -241,7 +250,7 @@ func (c *KwtSMS) DLR(msgID string) map[string]any {
 	payload := c.creds()
 	payload["msgid"] = msgID
 
-	data, err := request("dlr", payload, c.logFile)
+	data, err := c.request("dlr", payload)
 	if err != nil {
 		return map[string]any{
 			"result":      "ERROR",
@@ -256,7 +265,7 @@ func (c *KwtSMS) DLR(msgID string) map[string]any {
 // SenderIDs lists sender IDs registered on this account via /senderid/.
 // Never panics.
 func (c *KwtSMS) SenderIDs() map[string]any {
-	data, err := request("senderid", c.creds(), c.logFile)
+	data, err := c.request("senderid", c.creds())
 	if err != nil {
 		return map[string]any{
 			"result":      "ERROR",
@@ -286,7 +295,7 @@ func (c *KwtSMS) SenderIDs() map[string]any {
 // Coverage lists active country prefixes via /coverage/.
 // Never panics.
 func (c *KwtSMS) Coverage() map[string]any {
-	data, err := request("coverage", c.creds(), c.logFile)
+	data, err := c.request("coverage", c.creds())
 	if err != nil {
 		return map[string]any{
 			"result":      "ERROR",
@@ -338,7 +347,7 @@ func (c *KwtSMS) Validate(phones []string) ValidateResult {
 	payload := c.creds()
 	payload["mobile"] = strings.Join(validNormalized, ",")
 
-	data, err := request("validate", payload, c.logFile)
+	data, err := c.request("validate", payload)
 	if err != nil {
 		result.ER = append(validNormalized, result.ER...)
 		result.Error = err.Error()
@@ -482,7 +491,7 @@ func (c *KwtSMS) sendMulti(rawList []string, message string, sender string) (*Se
 		payload["test"] = "0"
 	}
 
-	data, err := request("send", payload, c.logFile)
+	data, err := c.request("send", payload)
 	if err != nil {
 		r := &SendResult{
 			Result:      "ERROR",
@@ -574,7 +583,7 @@ func (c *KwtSMS) sendBulk(numbers []string, message string, sender string) BulkS
 			}
 
 			var err error
-			data, err = request("send", payload, c.logFile)
+			data, err = c.request("send", payload)
 			if err != nil {
 				errors = append(errors, BatchError{
 					Batch:       i + 1,

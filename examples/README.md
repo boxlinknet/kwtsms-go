@@ -1,9 +1,10 @@
 # kwtsms-go Examples
 
-Six runnable examples demonstrating the kwtsms-go library.
+Seven runnable examples demonstrating the kwtSMS API and the kwtsms-go library.
 
 | # | Directory | Description |
 |---|-----------|-------------|
+| 0 | [00-raw-api](./00-raw-api/) | Call every kwtSMS endpoint using only the Go standard library (no dependencies) |
 | 1 | [01-basic-usage](./01-basic-usage/) | Load credentials, verify account, check balance, send a single SMS |
 | 2 | [02-otp-flow](./02-otp-flow/) | Generate a 6-digit OTP, validate the phone number, send the code |
 | 3 | [03-bulk-sms](./03-bulk-sms/) | Send to multiple numbers using SendMulti(), handle mixed formats |
