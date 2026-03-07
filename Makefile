@@ -15,9 +15,14 @@ cover:
 	@echo ""
 	@echo "HTML report: go tool cover -html=coverage.txt -o coverage.html"
 
-# Run go vet
+# Run golangci-lint (falls back to go vet)
 lint:
-	go vet ./...
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	else \
+		echo "golangci-lint not found, falling back to go vet"; \
+		go vet ./...; \
+	fi
 
 # Build CLI binary
 build:
