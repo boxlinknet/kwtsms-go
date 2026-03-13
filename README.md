@@ -84,14 +84,9 @@ func main() {
 
 ## Setup / Configuration
 
-### Interactive setup (CLI)
+### CLI Tool
 
-```bash
-go install github.com/boxlinknet/kwtsms-go/cmd/kwtsms@latest
-kwtsms setup
-```
-
-The setup wizard prompts for credentials, verifies them against the API, and writes a `.env` file with secure permissions (0600).
+For a standalone command-line tool (all platforms), see [kwtsms-cli](https://github.com/boxlinknet/kwtsms-cli).
 
 ### Environment variables
 
@@ -338,35 +333,6 @@ kwtsms.BatchError       // Error from a single batch in bulk send
 kwtsms.PhoneValidation  // Result of ValidatePhoneInput
 kwtsms.Option           // Functional option for New()
 ```
-
-## CLI
-
-Install the CLI:
-
-```bash
-go install github.com/boxlinknet/kwtsms-go/cmd/kwtsms@latest
-```
-
-Usage:
-
-```bash
-kwtsms setup                                     # interactive setup wizard
-kwtsms verify                                    # test credentials, show balance
-kwtsms balance                                   # show available + purchased credits
-kwtsms senderid                                  # list sender IDs
-kwtsms coverage                                  # list active country prefixes
-kwtsms send 96598765432 "Your OTP is: 1234"      # send SMS
-kwtsms send 96598765432,96512345678 "Hello"       # multi-number
-kwtsms send 96598765432 "Hello" --sender MY-APP   # custom sender
-kwtsms validate 96598765432 96512345678           # validate numbers
-kwtsms status f4c841adee210f31307633ceaebff2ec    # check message status
-kwtsms dlr f4c841adee210f31307633ceaebff2ec       # delivery report
-kwtsms version                                    # show version
-```
-
-Run `kwtsms setup` to create a `.env` file interactively. The wizard prompts for credentials, verifies them against the API, and writes the file with secure permissions (0600).
-
-The CLI reads credentials from `KWTSMS_USERNAME` and `KWTSMS_PASSWORD` environment variables or a `.env` file.
 
 ## Error Handling
 

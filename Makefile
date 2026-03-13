@@ -1,4 +1,4 @@
-.PHONY: test test-race cover build clean lint release
+.PHONY: test test-race cover clean lint release
 
 # Run unit tests
 test:
@@ -24,13 +24,9 @@ lint:
 		go vet ./...; \
 	fi
 
-# Build CLI binary
-build:
-	go build -o kwtsms ./cmd/kwtsms/
-
 # Clean build artifacts
 clean:
-	rm -f kwtsms coverage.txt coverage.html
+	rm -f coverage.txt coverage.html
 
 # ── Release ──────────────────────────────────────────────────────────
 #

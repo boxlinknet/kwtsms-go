@@ -5,9 +5,6 @@
 *.so
 *.dylib
 
-# CLI binary
-/kwtsms
-
 # Test binary
 *.test
 

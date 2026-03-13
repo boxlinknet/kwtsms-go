@@ -56,9 +56,6 @@ jobs:
           name: coverage
           path: coverage.txt
 
-      - name: Build CLI
-        run: go build -o kwtsms ./cmd/kwtsms/
-
   integration:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
