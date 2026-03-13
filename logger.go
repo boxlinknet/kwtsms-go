@@ -34,7 +34,7 @@ func writeLog(logFile string, entry logEntry) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	_, _ = f.Write(data)
 	_, _ = f.Write([]byte("\n"))

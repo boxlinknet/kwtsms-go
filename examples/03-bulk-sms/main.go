@@ -38,11 +38,9 @@ func main() {
 	// SendMulti accepts a slice of phone numbers.
 	// Each number is validated and normalized individually.
 	// Duplicates after normalization are automatically removed.
-	result, err := sms.Send(fmt.Sprintf("%s,%s,%s,%s,%s",
-		numbers[0], numbers[1], numbers[2], numbers[3], numbers[4]),
-		message, "")
-	// Alternatively, use SendMulti for a cleaner API with slices:
-	result, err = sms.SendMulti(numbers, message, "")
+	// Send accepts comma-separated numbers (not shown here).
+	// SendMulti provides a cleaner API with slices:
+	result, err := sms.SendMulti(numbers, message, "")
 	if err != nil {
 		fmt.Println("Send error:", err)
 		os.Exit(1)

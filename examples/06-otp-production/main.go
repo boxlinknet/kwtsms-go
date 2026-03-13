@@ -180,7 +180,7 @@ func handleOTPRequest(w http.ResponseWriter, r *http.Request) {
 	log.Printf("OTP sent to %s, msg-id: %s, balance: %.2f", normalized, result.MsgID, result.BalanceAfter)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success":         true,
 		"message":         "OTP sent successfully",
 		"expires_in_secs": int(otpExpiry.Seconds()),
@@ -241,7 +241,7 @@ func handleOTPVerify(w http.ResponseWriter, r *http.Request) {
 	delete(otpStore, v.Normalized)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"message": "OTP verified successfully",
 	})

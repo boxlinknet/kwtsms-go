@@ -64,7 +64,7 @@ KWTSMS_LOG_FILE=env.log
 
 	// Clear env vars to ensure .env file is used
 	for _, k := range []string{"KWTSMS_USERNAME", "KWTSMS_PASSWORD", "KWTSMS_SENDER_ID", "KWTSMS_TEST_MODE", "KWTSMS_LOG_FILE"} {
-		os.Unsetenv(k)
+		_ = os.Unsetenv(k)
 	}
 
 	c, err := FromEnv(envPath)
@@ -84,7 +84,7 @@ KWTSMS_LOG_FILE=env.log
 
 func TestFromEnvMissingCredentials(t *testing.T) {
 	for _, k := range []string{"KWTSMS_USERNAME", "KWTSMS_PASSWORD", "KWTSMS_SENDER_ID", "KWTSMS_TEST_MODE", "KWTSMS_LOG_FILE"} {
-		os.Unsetenv(k)
+		_ = os.Unsetenv(k)
 	}
 
 	_, err := FromEnv("/nonexistent/.env")
@@ -101,10 +101,10 @@ func TestFromEnvPrefersEnvVars(t *testing.T) {
 	envPath := filepath.Join(dir, ".env")
 	_ = os.WriteFile(envPath, []byte("KWTSMS_USERNAME=fileuser\nKWTSMS_PASSWORD=filepass\n"), 0644)
 
-	os.Setenv("KWTSMS_USERNAME", "envuser")
-	os.Setenv("KWTSMS_PASSWORD", "envpass")
-	defer os.Unsetenv("KWTSMS_USERNAME")
-	defer os.Unsetenv("KWTSMS_PASSWORD")
+	_ = os.Setenv("KWTSMS_USERNAME", "envuser")
+	_ = os.Setenv("KWTSMS_PASSWORD", "envpass")
+	defer func() { _ = os.Unsetenv("KWTSMS_USERNAME") }()
+	defer func() { _ = os.Unsetenv("KWTSMS_PASSWORD") }()
 
 	c, err := FromEnv(envPath)
 	if err != nil {

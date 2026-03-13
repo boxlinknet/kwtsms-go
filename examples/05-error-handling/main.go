@@ -5,7 +5,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	kwtsms "github.com/boxlinknet/kwtsms-go"
@@ -174,31 +173,4 @@ func showErrorCodeTable() {
 	fmt.Println()
 	fmt.Println("Best practice: wrap Send() results in a helper function.")
 	fmt.Println("See examples/04-http-handler for a complete HTTP integration.")
-}
-
-// userFacingError converts a SendResult error to a safe message for end users.
-// Use this pattern in your application code.
-func userFacingError(result *kwtsms.SendResult) string {
-	if result.Result == "OK" {
-		return ""
-	}
-
-	switch result.Code {
-	case "ERR006", "ERR025", "ERR_INVALID_INPUT":
-		return "The phone number is not valid. Please check and try again."
-	case "ERR009":
-		return "The message cannot be empty."
-	case "ERR010", "ERR011":
-		return "SMS service is temporarily unavailable."
-	case "ERR012":
-		return "The message is too long. Please shorten it."
-	case "ERR028":
-		return "Please wait a moment before sending again."
-	case "NETWORK":
-		return "Could not reach the SMS service. Please try again."
-	default:
-		// Log the actual error for debugging, return a generic message to the user.
-		fmt.Fprintf(os.Stderr, "Unhandled SMS error: code=%s desc=%s\n", result.Code, result.Description)
-		return "Failed to send SMS. Please try again later."
-	}
 }

@@ -601,7 +601,8 @@ func (c *KwtSMS) sendBulk(numbers []string, message string, sender string) BulkS
 
 		if data != nil {
 			result, _ := data["result"].(string)
-			if result == "OK" {
+			switch result {
+			case "OK":
 				mid, _ := data["msg-id"].(string)
 				msgIDs = append(msgIDs, mid)
 				totalNums += int(toFloat64(data["numbers"]))
@@ -611,7 +612,7 @@ func (c *KwtSMS) sendBulk(numbers []string, message string, sender string) BulkS
 					lastBalance = &v
 					c.setBalance(v)
 				}
-			} else if result == "ERROR" {
+			case "ERROR":
 				code, _ := data["code"].(string)
 				desc, _ := data["description"].(string)
 				errors = append(errors, BatchError{

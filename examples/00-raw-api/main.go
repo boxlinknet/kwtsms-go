@@ -59,7 +59,7 @@ func callAPI(endpoint string, payload map[string]any) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("network error: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {

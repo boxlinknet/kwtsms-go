@@ -337,7 +337,7 @@ func TestMockNetworkError(t *testing.T) {
 		hj, ok := w.(http.Hijacker)
 		if ok {
 			conn, _, _ := hj.Hijack()
-			conn.Close()
+			_ = conn.Close()
 		}
 	}))
 	server.Close() // Close immediately to simulate network error
