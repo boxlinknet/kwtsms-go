@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Country-specific phone validation: `PhoneRules` (90+ countries), `FindCountryCode()`, `ValidatePhoneFormat()`, `CountryNames`
+- Domestic trunk prefix stripping in `NormalizePhone()` (e.g., `9660559...` becomes `966559...`)
+- `ValidatePhoneInput()` now validates against country-specific length and mobile prefix rules
+- GitGuardian secrets scanning workflow on push and PR
+
+### Removed
+
+- CLI tool (`cmd/kwtsms/`): moved to dedicated repo [kwtsms-cli](https://github.com/boxlinknet/kwtsms-cli)
+- CLI cross-compilation from release workflow
+
+### Fixed
+
+- All golangci-lint errcheck, staticcheck, and unused warnings resolved
+
 ## [0.3.0] - 2026-03-07
 
 ### Added

@@ -274,15 +274,35 @@ if p := sms.CachedPurchased(); p != nil {
 These are exported for direct use:
 
 ```go
-// Normalize a phone number: Arabic digits to Latin, strip non-digits, strip leading zeros
+// Normalize a phone number: Arabic digits to Latin, strip non-digits, strip leading zeros,
+// strip domestic trunk prefix (e.g. 9660559... becomes 966559...)
 normalized := kwtsms.NormalizePhone("+965 9876 5432") // "96598765432"
+normalized = kwtsms.NormalizePhone("9660559876543")   // "966559876543" (Saudi trunk 0 stripped)
 
-// Validate phone input before sending
+// Validate phone input before sending (includes country-specific rules)
 v := kwtsms.ValidatePhoneInput("user@gmail.com")
 // v.Valid=false, v.Error="'user@gmail.com' is an email address, not a phone number"
 
 v = kwtsms.ValidatePhoneInput("+96598765432")
 // v.Valid=true, v.Normalized="96598765432"
+
+v = kwtsms.ValidatePhoneInput("+96512345678")
+// v.Valid=false, v.Error="Invalid Kuwait mobile number: after +965 must start with 4, 5, 6, 9"
+
+// Find the country code from a normalized number
+cc := kwtsms.FindCountryCode("96598765432") // "965" (Kuwait)
+cc = kwtsms.FindCountryCode("12125551234")  // "1" (USA/Canada)
+
+// Validate against country-specific format rules
+err := kwtsms.ValidatePhoneFormat("96598765432") // "" (valid)
+err = kwtsms.ValidatePhoneFormat("96512345678")  // "Invalid Kuwait mobile number: ..."
+
+// Look up phone rules for a country (90+ countries covered)
+rule := kwtsms.PhoneRules["965"] // {LocalLengths: [8], MobileStartDigits: ["4","5","6","9"]}
+name := kwtsms.CountryNames["965"] // "Kuwait"
+
+// Load .env file manually (returns key-value map, never panics)
+env := kwtsms.LoadEnvFile("/path/to/.env")
 
 // Clean a message: strip emojis, HTML, control chars, convert Arabic digits
 cleaned := kwtsms.CleanMessage("Hello  <b>World</b> 123")
@@ -295,6 +315,29 @@ action := kwtsms.APIErrors["ERR003"]
 // Enrich an error response with action guidance
 enriched := kwtsms.EnrichError(apiResponse)
 ```
+
+## Phone Validation Rules
+
+`ValidatePhoneInput()` and `Send()` automatically validate numbers against country-specific rules for 90+ countries. Validation checks:
+
+1. **Local number length**: each country has specific valid lengths (e.g., Kuwait: 8 digits after +965)
+2. **Mobile prefix**: each country has valid starting digits for mobile numbers (e.g., Kuwait: 4, 5, 6, 9)
+3. **Domestic trunk prefix**: automatically stripped during normalization (e.g., 9660559... becomes 966559...)
+
+Numbers from countries not in the rules table pass through with generic E.164 validation (7-15 digits).
+
+GCC coverage:
+
+| Country | Code | Local Digits | Mobile Prefixes |
+|---------|------|-------------|-----------------|
+| Kuwait | 965 | 8 | 4x, 5x, 6x, 9x |
+| Saudi Arabia | 966 | 9 | 5x |
+| UAE | 971 | 9 | 5x |
+| Bahrain | 973 | 8 | 3x, 6x |
+| Qatar | 974 | 8 | 3x, 5x, 6x, 7x |
+| Oman | 968 | 8 | 7x, 9x |
+
+The full rules table (`kwtsms.PhoneRules`) covers GCC, Levant, North Africa, Europe, Americas, Asia, Africa, and Oceania. See `phone.go` for the complete list.
 
 ## Input Sanitization
 
@@ -321,7 +364,9 @@ if strings.TrimSpace(cleaned) == "" {
 }
 ```
 
-## Exported Types
+## Exports
+
+### Types
 
 ```go
 kwtsms.KwtSMS           // Client struct
@@ -331,7 +376,28 @@ kwtsms.ValidateResult   // Validate response
 kwtsms.InvalidEntry     // Rejected phone number with error message
 kwtsms.BatchError       // Error from a single batch in bulk send
 kwtsms.PhoneValidation  // Result of ValidatePhoneInput
+kwtsms.PhoneRule        // Country-specific phone validation rule
 kwtsms.Option           // Functional option for New()
+```
+
+### Functions
+
+```go
+kwtsms.NormalizePhone()      // Normalize phone: Arabic digits, strip non-digits, trunk prefix
+kwtsms.ValidatePhoneInput()  // Validate phone input with country-specific rules
+kwtsms.FindCountryCode()     // Extract country code from normalized number
+kwtsms.ValidatePhoneFormat() // Validate against country-specific length and prefix rules
+kwtsms.CleanMessage()        // Strip emojis, HTML, control chars, convert Arabic digits
+kwtsms.EnrichError()         // Add action guidance to API error response
+kwtsms.LoadEnvFile()         // Parse .env file into key-value map
+```
+
+### Variables
+
+```go
+kwtsms.APIErrors     // map[string]string: error code to action message (33 codes)
+kwtsms.PhoneRules    // map[string]PhoneRule: country code to validation rules (90+ countries)
+kwtsms.CountryNames  // map[string]string: country code to human-readable name
 ```
 
 ## Error Handling
