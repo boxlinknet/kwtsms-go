@@ -60,7 +60,7 @@ KWTSMS_SENDER_ID=ENV-SENDER
 KWTSMS_TEST_MODE=1
 KWTSMS_LOG_FILE=env.log
 `
-	os.WriteFile(envPath, []byte(content), 0644)
+	_ = os.WriteFile(envPath, []byte(content), 0644)
 
 	// Clear env vars to ensure .env file is used
 	for _, k := range []string{"KWTSMS_USERNAME", "KWTSMS_PASSWORD", "KWTSMS_SENDER_ID", "KWTSMS_TEST_MODE", "KWTSMS_LOG_FILE"} {
@@ -99,7 +99,7 @@ func TestFromEnvMissingCredentials(t *testing.T) {
 func TestFromEnvPrefersEnvVars(t *testing.T) {
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, ".env")
-	os.WriteFile(envPath, []byte("KWTSMS_USERNAME=fileuser\nKWTSMS_PASSWORD=filepass\n"), 0644)
+	_ = os.WriteFile(envPath, []byte("KWTSMS_USERNAME=fileuser\nKWTSMS_PASSWORD=filepass\n"), 0644)
 
 	os.Setenv("KWTSMS_USERNAME", "envuser")
 	os.Setenv("KWTSMS_PASSWORD", "envpass")

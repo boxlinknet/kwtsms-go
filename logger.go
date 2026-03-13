@@ -36,8 +36,8 @@ func writeLog(logFile string, entry logEntry) {
 	}
 	defer f.Close()
 
-	f.Write(data)
-	f.Write([]byte("\n"))
+	_, _ = f.Write(data)
+	_, _ = f.Write([]byte("\n"))
 }
 
 // maskPassword creates a copy of the payload with the password field masked.

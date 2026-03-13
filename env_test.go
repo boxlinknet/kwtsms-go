@@ -23,7 +23,7 @@ QUOTED_SINGLE='hello world'
 WITH_COMMENT=value  # this is a comment
 SPACES_AROUND = spaced_value
 `
-	os.WriteFile(path, []byte(content), 0644)
+	_ = os.WriteFile(path, []byte(content), 0644)
 
 	env := LoadEnvFile(path)
 
@@ -65,7 +65,7 @@ func TestLoadEnvFileMissing(t *testing.T) {
 func TestLoadEnvFileEmpty(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".env")
-	os.WriteFile(path, []byte(""), 0644)
+	_ = os.WriteFile(path, []byte(""), 0644)
 
 	env := LoadEnvFile(path)
 	if len(env) != 0 {
