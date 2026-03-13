@@ -58,13 +58,13 @@ func apiRouter(handlers map[string]http.HandlerFunc) http.HandlerFunc {
 
 func jsonResponse(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 func jsonError(w http.ResponseWriter, code int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 // --- Mock API Tests ---
@@ -129,7 +129,7 @@ func TestMockSendSuccess(t *testing.T) {
 	handler := apiRouter(map[string]http.HandlerFunc{
 		"send": func(w http.ResponseWriter, r *http.Request) {
 			var body map[string]any
-			json.NewDecoder(r.Body).Decode(&body)
+			_ = json.NewDecoder(r.Body).Decode(&body)
 
 			// Verify test mode
 			if body["test"] != "1" {
@@ -410,7 +410,7 @@ func TestMockStatus(t *testing.T) {
 	handler := apiRouter(map[string]http.HandlerFunc{
 		"status": func(w http.ResponseWriter, r *http.Request) {
 			var body map[string]any
-			json.NewDecoder(r.Body).Decode(&body)
+			_ = json.NewDecoder(r.Body).Decode(&body)
 			if body["msgid"] != "test-id-123" {
 				t.Errorf("msgid = %v, want test-id-123", body["msgid"])
 			}
@@ -508,7 +508,7 @@ func TestMockSendMessageCleaning(t *testing.T) {
 	handler := apiRouter(map[string]http.HandlerFunc{
 		"send": func(w http.ResponseWriter, r *http.Request) {
 			var body map[string]any
-			json.NewDecoder(r.Body).Decode(&body)
+			_ = json.NewDecoder(r.Body).Decode(&body)
 			sentMessage, _ = body["message"].(string)
 			jsonResponse(w, map[string]any{
 				"result":         "OK",
@@ -522,7 +522,7 @@ func TestMockSendMessageCleaning(t *testing.T) {
 
 	withMockServer(t, handler, func(c *KwtSMS) {
 		// Send with emojis and HTML
-		c.Send("96598765432", "Hello 😀 <b>World</b>", "")
+		_, _ = c.Send("96598765432", "Hello 😀 <b>World</b>", "")
 		if strings.Contains(sentMessage, "😀") {
 			t.Error("emoji should be stripped from message")
 		}
@@ -540,7 +540,7 @@ func TestMockSendSenderOverride(t *testing.T) {
 	handler := apiRouter(map[string]http.HandlerFunc{
 		"send": func(w http.ResponseWriter, r *http.Request) {
 			var body map[string]any
-			json.NewDecoder(r.Body).Decode(&body)
+			_ = json.NewDecoder(r.Body).Decode(&body)
 			sentSender, _ = body["sender"].(string)
 			jsonResponse(w, map[string]any{
 				"result":         "OK",
@@ -553,7 +553,7 @@ func TestMockSendSenderOverride(t *testing.T) {
 	})
 
 	withMockServer(t, handler, func(c *KwtSMS) {
-		c.Send("96598765432", "Hello", "CUSTOM-SENDER")
+		_, _ = c.Send("96598765432", "Hello", "CUSTOM-SENDER")
 		if sentSender != "CUSTOM-SENDER" {
 			t.Errorf("sender = %q, want CUSTOM-SENDER", sentSender)
 		}

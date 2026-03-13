@@ -17,7 +17,6 @@ package kwtsms
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 	"os"
 	"strings"
@@ -705,7 +704,3 @@ func stringVal(m map[string]any, key string) string {
 	return v
 }
 
-// toFloat64Safe rounds to avoid floating point artifacts.
-func toFloat64Safe(v float64) float64 {
-	return math.Round(v*100) / 100
-}

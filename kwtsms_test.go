@@ -10,34 +10,6 @@ import (
 	"testing"
 )
 
-// mockServer creates a test HTTP server that returns canned responses based on endpoint.
-func mockServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, func()) {
-	t.Helper()
-	server := httptest.NewServer(handler)
-	// Override the baseURL by swapping the package-level httpClient and baseURL
-	origURL := baseURL
-	origClient := httpClient
-
-	// We can't change const baseURL, so we'll use a different approach:
-	// override the request function behavior via a custom HTTP server
-	return server, func() {
-		server.Close()
-		_ = origURL
-		_ = origClient
-	}
-}
-
-// newTestClient creates a KwtSMS client pointing to the test server.
-func newTestClient(serverURL string) *KwtSMS {
-	c, _ := New("testuser", "testpass", WithTestMode(true), WithLogFile(""))
-	return c
-}
-
-// overrideBaseURL temporarily replaces the base URL for testing.
-// Since baseURL is a const, we need to use a different approach.
-// We'll test at a higher level by creating a mock server and using
-// a custom request function.
-
 // TestNewValidation tests constructor validation.
 func TestNewValidation(t *testing.T) {
 	_, err := New("", "pass")
@@ -237,7 +209,7 @@ func TestCachedBalanceNilByDefault(t *testing.T) {
 func TestMockedAPISend(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
-		json.NewDecoder(r.Body).Decode(&body)
+		_ = json.NewDecoder(r.Body).Decode(&body)
 
 		// Check Content-Type
 		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
@@ -253,7 +225,7 @@ func TestMockedAPISend(t *testing.T) {
 			"unix-timestamp": 1684763355,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
